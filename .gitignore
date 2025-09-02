@@ -1,0 +1,13 @@
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
