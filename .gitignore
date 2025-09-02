@@ -1,13 +1,81 @@
-# Virtual environments
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environment folders
 venv/
 .venv/
 env/
+env.bak/
+venv.bak/
 
-# Byte-compiled files
-__pycache__/
-*.py[cod]
+# PyCharm IDE
+.idea/
 
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
+# VS Code
+.vscode/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# pytest
+.cache
+.pytest_cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Pyre type checker
+.pyre/
+
+# Profiling data
+.prof
+
+# Logs and databases
+*.log
+*.sqlite3
+
+# Matplotlib cache
+.mplcache/
+
+# Airflow
+airflow.cfg
+airflow.db
+airflow/logs/
+airflow/plugins/
+airflow/airflow-webserver.pid
+
+# OpenAI API key files or tokens
+# (if any local config files hold secrets)
+*.env
+.env*
+
+# ydata_profiling reports output folder if generated
+reports/
+
+# pyenv
+.python-version

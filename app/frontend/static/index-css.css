@@ -1,0 +1,224 @@
+body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f7f9;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* Layout */
+    .main-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 20px;
+    }
+
+    .left-section {
+      flex: 1;
+      padding: 20px 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .left-section h1 {
+      font-size: 2.5rem;
+      color: #1a73e8;
+      margin-bottom: 10px;
+    }
+
+    .left-section p {
+      font-size: 1.1rem;
+      color: #444;
+      line-height: 1.6;
+    }
+
+    .upload-container {
+      background-color: #fff;
+      padding: 40px 60px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      max-width: 500px;
+      width: 100%;
+    }
+
+    .upload-container h2 {
+      color: #1a73e8;
+      margin-bottom: 10px;
+    }
+
+    .upload-container p {
+      color: #666;
+      margin-bottom: 30px;
+    }
+
+    .upload-box {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    /* Bigger Local Upload button */
+    .custom-file-upload {
+      background-color: #4285f4;
+      color: white;
+      padding: 20px 60px;
+      border: none;
+      border-radius: 10px;
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      display: inline-block;
+      align-self: center;
+    }
+
+    .custom-file-upload:hover {
+      background-color: #3367d6;
+    }
+
+    #fileUpload {
+      display: none;
+    }
+
+    /* Smaller Round Buttons below main button */
+    .side-buttons {
+      align-items: center;
+      padding-left: 39%;
+      text-align: center;
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-left: 8px;
+    }
+
+    .round-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      color: white;
+      transition: transform 0.2s ease, background-color 0.3s ease;
+    }
+
+    .round-btn:hover {
+      transform: scale(1.1);
+    }
+
+    .drive-btn {
+      background-color: #34a853;
+    }
+
+    .api-btn {
+      background-color: #fbbc05;
+    }
+
+    .command-input-container {
+      width: 100%;
+      margin-top: 20px;
+      text-align: left;
+    }
+
+ 
+    
+    .command-input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-family: monospace;
+      box-sizing: border-box;
+    }
+
+    .submit-btn {
+      background-color: #28a745;
+      color: white;
+      padding: 15px 30px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      margin-top: 20px;
+      width: 100%;
+    }
+    
+    .submit-btn:hover {
+      background-color: #218838;
+    }
+
+    .file-info-container {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 10px 20px;
+      background-color: #e0f7fa;
+      border: 1px solid #b2ebf2;
+      border-radius: 8px;
+      margin-top: 10px;
+    }
+
+    .file-name {
+      font-weight: bold;
+      color: #00796b;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .remove-btn {
+      background-color: #ff5252;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    .remove-btn:hover {
+      background-color: #d32f2f;
+    }
+
+    /* Footer */
+    footer {
+      background-color: #1a73e8;
+      color: white;
+      text-align: center;
+      padding: 15px 20px;
+      font-size: 14px;
+    }
+
+    footer .tech-stack {
+      margin-top: 8px;
+      font-size: 13px;
+      opacity: 0.9;
+    }
+
+    @media (max-width: 900px) {
+      .main-container {
+        flex-direction: column;
+        gap: 30px;
+      }
+      .left-section {
+        text-align: center;
+      }
+      .upload-box {
+        align-items: center;
+      }
+      
+    }

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GenSight - AI Powered Data Analysis</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <link rel="stylesheet" href="/static/index-css.css">
+  
+</head>
+<body>
+  <div class="main-container">
+    <!-- Left Section -->
+    <div class="left-section">
+      <h1><i class="fas fa-chart-line"></i> GenSight</h1>
+      <p>
+        An <strong>AI-Powered Data Analysis Tool</strong> that transforms raw data into actionable insights.  
+        Upload your datasets, choose your processing engine, and let GenSight handle the rest.
+      </p>
+    </div>
+
+    <!-- Right Section (Upload) -->
+    <div class="upload-container">
+      <h2>Upload Your Data</h2>
+      <p>Choose how you want to upload your dataset and start analyzing instantly.</p>
+
+      <form id="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+        <div class="upload-box" id="upload-box-main">
+          <!-- Main Local Upload -->
+          <label for="fileUpload" class="custom-file-upload"> UPLOAD FILE</label>
+          <input type="file" id="fileUpload" name="file" required>
+
+          <!-- Small buttons below main button -->
+          <div class="side-buttons">
+            <button type="button" class="round-btn drive-btn" title="Upload from Google Drive">
+              <i class="fab fa-google-drive"></i>
+            </button>
+            <button type="button" class="round-btn api-btn" title="Upload via API">
+              <i class="fas fa-link"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="file-info-container" id="file-info-box">
+          <span id="file-name" class="file-name"></span>
+          <button type="button" id="remove-file-btn" class="remove-btn">Remove</button>
+        </div>
+
+        <div class="command-input-container">
+          <div><label for="command-line"><b>Command :</b></label></div>
+          <div><input type="text" id="command-line" name="command" class="command-input" placeholder="e.g., -f:p for Pandas, -f:ps for PySpark"></div>
+          
+        </div>
+
+        <button type="submit" class="submit-btn" id="process-btn">Analyze Data</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    © 2025 GenSight | Built by <a href="https://github.com/AJSuryaA" target="_blank">AJSuryaA</a>
+      Powered by AI 🤖 | Hadoop & Spark ⚡ | MongoDB & MySQL 🛢️ | Apache Airflow 🔄 | Apache Superset 📊
+    </div>
+  </footer>
+
+  <script src="/static/index-js.js"></script>
+</body>
+</html>
