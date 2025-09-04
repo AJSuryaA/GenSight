@@ -16,9 +16,10 @@ def pandas_eda(df):
     print(df.nunique())
     # Correlation matrix for numeric columns
     print("\nCorrelation Matrix:")
-    print(df.corr())
+    df_n= df.select_dtypes(include=["number"])
+    print(df_n.corr())
     # Visualizations
-    sns.histplot(df.select_dtypes(include='number').iloc[:,0])
+    sns.histplot(df_n.iloc[:,0])
     plt.title('Histogram of first numeric column')
     plt.show()
 

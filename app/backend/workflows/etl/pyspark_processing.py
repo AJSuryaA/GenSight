@@ -21,6 +21,8 @@ def get_dataset_info(hdfs_path):
         null_counts[c] = df.filter(df[c].isNull()).count()
 
     spark.stop()
+
+    print("get_data_info completed--------------------------->")
     
     return {
         "rows": rows,

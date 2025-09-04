@@ -18,6 +18,12 @@ from pyspark.sql import SparkSession
 
 from app.backend.workflows.eda.pandas_profiling_eda import generate_pandas_eda_report
 
+from app.backend.workflows.eda.gpt_integration import create_eda_summary_prompt, call_gpt_api, parse_gpt_structured_response, create_eda_summary_prompt_spark
+from app.backend.workflows.eda.data_cleaning_pyspark import clean_data_spark, save_cleaned_spark, drop_columns_spark, drop_empty_columns_spark 
+import pandas as pd
+
+from app.backend.workflows.eda.data_cleaning_pandas import clean_data, save_cleaned_data
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: run before app starts receiving requests
@@ -114,6 +120,7 @@ def upload_to_hdfs(local_file_path, hdfs_dir="/user/gen_sight/uploads"):
     except subprocess.CalledProcessError as e:
         print(f"Error uploading to HDFS: {e.stderr}")
         raise
+    
 
 
 @app.post("/upload")
@@ -129,7 +136,10 @@ async def upload_file(file: UploadFile = File(...), command: str = Form(None)):
         mode = choose_processing_mode(file_location, command)
 
         # Upload to HDFS
+        print(f"Uploading file to HDFS: {file_location} => directory: /user/gen_sight/uploads")
         hdfs_path = upload_to_hdfs(file_location)
+        print(f"File uploaded to HDFS path: {hdfs_path}")
+
 
         # Get dataset info based on processing mode
         if mode == "pandas":
@@ -137,35 +147,85 @@ async def upload_file(file: UploadFile = File(...), command: str = Form(None)):
 
             # Run EDA for pandas
             df = pd.read_csv(file_location)
-            report_file = generate_pandas_eda_report(df)
-            report_url = report_file.replace("app/backend", "app/backend/workflows/eda/reports")  # Adjust path for URL
+            # report_file = generate_pandas_eda_report(df)
+            # report_url = report_file.replace("app/backend", "app/backend/workflows/eda/reports")
+             # Create EDA prompt
+            prompt = create_eda_summary_prompt(df)
+            # Call GPT API
+            gpt_response = call_gpt_api(prompt)
+            # Parse GPT response to get columns to drop
+            structured_data = parse_gpt_structured_response(gpt_response)
+
+            df_cleaned = clean_data(df, structured_data)
+            save_cleaned_data(df_cleaned, "data.csv")
+            # Drop columns from df
+            # df_cleaned = drop_columns(df, cols_to_drop)
+             # Save cleaned data if needed
+            # cleaned_path = file_location.replace(".csv", "_cleaned.csv")
+            # df_cleaned.to_csv(cleaned_path, index=False)
+            print("sonar raw response:", gpt_response)
+            print("\n\n"+"\n_______________________________________________________________________")
+            print("Parsed GPT Data:", structured_data)
+            print("\n\n"+"\n_______________________________________________________________________")
+            
+            
+
             pandas_eda(df)
             return JSONResponse({
                 # other fields...
-                "eda_report_url": report_url
+                # "eda_report_url": report_url,
+                "original_columns": list(df.columns),
+                # "columns_removed": cols_to_drop,
+                # "cleaned_file_path": cleaned_path,
+                "gpt_suggestions": gpt_response
             })
             
 
         elif mode == "pyspark":
             dataset_info = get_pyspark_info(hdfs_path)
 
-            # Run EDA for pyspark
             spark = SparkSession.builder.appName("EDA").getOrCreate()
-            sdf = spark.read.csv(hdfs_path, header=True, inferSchema=True)
-            pyspark_eda(sdf)
-            spark.stop()
-            
-        else:
-            dataset_info = {}
+            try:
+                print("starrted_____________________1")
+                sdf = spark.read.csv(hdfs_path, header=True, inferSchema=True)
+                print("starrted_____________________2")
+                if '_c0' in sdf.columns:
+                    sdf = sdf.drop('_c0')
+                print("starrted_____________________3")
+                pyspark_eda(sdf)  # your existing EDA function
+                print("starrted_____________________4")
+                
+                prompt = create_eda_summary_prompt_spark(sdf)
+                gpt_response = call_gpt_api(prompt)
+                structured_data = parse_gpt_structured_response(gpt_response)
+                print("sonar raw response:", gpt_response)
+                print("\n\n"+"\n_______________________________________________________________________")
+                print("Parsed GPT Data:", structured_data)
+                print("\n\n"+"\n_______________________________________________________________________")
+                print("starrted_____________________5")
+                # Clean Spark dataframe based on GPT instructions
+                sdf_cleaned = clean_data_spark(sdf, structured_data)
+                print("starrted_____________________6")
+                hdfs_exact_file_path = "/user/gen_sight/uploads/data.csv"
+                save_cleaned_spark(sdf_cleaned, hdfs_exact_file_path)
 
-        return JSONResponse({
-            "filename": file.filename,
-            "processing_mode": mode,
-            "message": "File uploaded successfully.",
-            "local_path": file_location,
-            "hdfs_path": hdfs_path,
-            "dataset_info": dataset_info
-        })
+            except Exception as e:
+                spark.stop()
+                print(f"Error during PySpark processing: {e}")
+                return JSONResponse(status_code=500, content={"error": str(e)})
+
+            spark.stop()
+
+            return JSONResponse({
+                "filename": file.filename,
+                "processing_mode": mode,
+                "message": "File uploaded and cleaned successfully.",
+                "local_path": file_location,
+                "hdfs_path": hdfs_path,
+                "dataset_info": dataset_info,
+                "gpt_suggestions": gpt_response
+            })
+
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
