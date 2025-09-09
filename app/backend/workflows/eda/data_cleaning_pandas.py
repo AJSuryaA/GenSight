@@ -4,7 +4,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 
 
-UPLOAD_DIR = "/home/master_node/GenSight/uploaded_files"
+UPLOAD_DIR = "/home/master_node/Gensight_P/uploaded_files"
 def drop_columns(df: pd.DataFrame, cols_to_drop: list) -> pd.DataFrame:
     cols_exist = [col for col in cols_to_drop if col in df.columns]
     return df.drop(columns=cols_exist)
@@ -62,17 +62,31 @@ def clean_data(df: pd.DataFrame, cleaning_instructions: dict) -> pd.DataFrame:
     df = impute_missing_values(df)
 
     # Label encode
-    if 'label_encoding' in cleaning_instructions:
-        df = label_encode_columns(df, cleaning_instructions['label_encoding'])
+    # if 'label_encoding' in cleaning_instructions:
+    #     df = label_encode_columns(df, cleaning_instructions['label_encoding'])
 
     # Standard scaling
     if cleaning_instructions.get('standard_scalar', ['no'])[0].lower() == 'yes':
-        df = apply_standard_scaling(df)
-
+        # Only scale feature columns, skip target for classification
+        problem_type = cleaning_instructions.get('problem_type', ['regression'])[0].lower()
+        target_col = cleaning_instructions.get('target_column', [None])[0]
+        print(target_col)
+        if problem_type == 'classification' and target_col in df.columns:
+            feature_cols = [c for c in df.columns if c != target_col]
+            print(feature_cols)
+            df[feature_cols] = apply_standard_scaling(df[feature_cols])
+        else:
+            df = apply_standard_scaling(df)
+            print("all---------------------")
+ 
     return df
 
 def save_cleaned_data(df: pd.DataFrame, filename: str = "data.csv") -> None:
     output_path = os.path.join(UPLOAD_DIR, filename)
     df.to_csv(output_path, index=False)
     return output_path
+
+
+
+
 

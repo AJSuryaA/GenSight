@@ -3,6 +3,7 @@ from pyspark.sql.functions import col
 from pyspark.ml.feature import StringIndexer, StandardScaler, VectorAssembler, Imputer
 from pyspark.ml import Pipeline
 import subprocess
+from pyspark.ml.functions import vector_to_array
 
 def drop_columns_spark(df: DataFrame, cols_to_drop: list) -> DataFrame:
     """
@@ -29,8 +30,7 @@ def drop_empty_columns_spark(df: DataFrame, threshold: float = 1.0) -> DataFrame
         df = df.drop(*cols_to_drop)
     return df
 
-from pyspark.sql import DataFrame
-from pyspark.ml.feature import Imputer
+
 
 def impute_missing_spark(df: DataFrame) -> DataFrame:
     numeric_cols = [f.name for f in df.schema.fields if f.dataType.simpleString() in ['int', 'double', 'long', 'float']]
@@ -117,6 +117,44 @@ def standard_scale_spark(df: DataFrame) -> DataFrame:
     df = df.drop("features_vector", "scaled_features")
     return df
 
+
+
+def apply_standard_scaling_spark(df: DataFrame, instructions: dict) -> DataFrame:
+    """
+    Applies StandardScaler only to feature columns.
+    Skips scaling the target column if it's a classification problem.
+    """
+    if instructions.get('standard_scalar', ['no'])[0].lower() != 'yes':
+        return df
+
+    problem_type = instructions.get('problem_type', ['regression'])[0].lower()
+    target_col = instructions.get('target_column', [None])[0]
+
+    # Determine feature columns (exclude target for classification)
+    if problem_type == 'classification' and target_col in df.columns:
+        feature_cols = [c for c in df.columns if c != target_col]
+    else:
+        feature_cols = df.columns
+
+    # Assemble features into vector
+    assembler = VectorAssembler(inputCols=feature_cols, outputCol="raw_features")
+    df_vect = assembler.transform(df)
+
+    # Scale features
+    scaler = StandardScaler(inputCol="raw_features", outputCol="scaled_features",
+                            withMean=False, withStd=True)
+    scaler_model = scaler.fit(df_vect)
+    df_scaled = scaler_model.transform(df_vect)
+
+    # Convert vector to array and split back into columns
+    df_array = df_scaled.withColumn("scaled_array", vector_to_array("scaled_features"))
+    for i, col_name in enumerate(feature_cols):
+        df_array = df_array.withColumn(col_name, col("scaled_array")[i])
+
+    # Drop helper columns
+    return df_array.drop("raw_features", "scaled_features", "scaled_array")
+
+
 def clean_data_spark(df: DataFrame, instructions: dict) -> DataFrame:
     """
     Clean Spark DataFrame based on instructions dictionary.
@@ -125,18 +163,14 @@ def clean_data_spark(df: DataFrame, instructions: dict) -> DataFrame:
         df = drop_columns_spark(df, instructions['drop_columns'])
 
     df = drop_empty_columns_spark(df)
-
     df = impute_missing_spark(df)
 
-    if 'label_encoding' in instructions:
-        df = label_encode_spark(df, instructions['label_encoding'])
+    # Apply scaling and show head for verification
+    final_df = apply_standard_scaling_spark(df, instructions)
+    print("Data after scaling (first 5 rows):")
+    final_df.show(5, truncate=False)
+    return final_df
 
-    if instructions.get('standard_scalar', ['no'])[0].lower() == 'yes':
-        df = standard_scale_spark(df)
-
-    return df
-
-import subprocess
 
 def save_cleaned_spark(df: DataFrame, hdfs_file_path: str):
     """
@@ -148,6 +182,11 @@ def save_cleaned_spark(df: DataFrame, hdfs_file_path: str):
     """
     import os
 
+    # If df is None, log and skip saving
+    if df is None:
+        print(f"save_cleaned_spark: received None DataFrame, skipping save to {hdfs_file_path}")
+        return
+
     # Extract directory and filename
     hdfs_dir = os.path.dirname(hdfs_file_path)
     filename = os.path.basename(hdfs_file_path)
@@ -155,8 +194,12 @@ def save_cleaned_spark(df: DataFrame, hdfs_file_path: str):
     # Temporary directory to write single CSV part file
     tmp_dir = hdfs_dir.rstrip('/') + "_tmp_save_dir"
 
-    # 1. Write DataFrame as single partition CSV to temp dir
-    df.coalesce(1).write.mode("overwrite").option("header", "true").csv(tmp_dir)
+    # 1. Write DataFrame as a single partition CSV to temp dir
+    df.coalesce(1) \
+      .write \
+      .mode("overwrite") \
+      .option("header", "true") \
+      .csv(tmp_dir)
 
     # 2. Find the part file in temp dir
     cmd_ls = ["hdfs", "dfs", "-ls", tmp_dir]
@@ -176,5 +219,6 @@ def save_cleaned_spark(df: DataFrame, hdfs_file_path: str):
     subprocess.run(cmd_rm, check=True)
 
     print(f"Saved cleaned DataFrame as {hdfs_file_path} on HDFS.")
+
 
 

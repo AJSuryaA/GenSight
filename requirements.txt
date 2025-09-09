@@ -8,6 +8,8 @@ numpy
 matplotlib
 seaborn
 scikit-learn
+xgboost
+catboost
 
 apache-airflow
 apache-airflow-providers-fab

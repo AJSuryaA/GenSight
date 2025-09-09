@@ -21,13 +21,13 @@ def create_eda_summary_prompt(df: pd.DataFrame) -> str:
         f"Here is a basic EDA summary and sample data:\n{prompt}\n"
         "Only respond with EXACTLY the following dictionary format, no extra text:\n\n"
         "drop_columns = [col_names as a list]\n"
-        "algorithm = ['supervised' or 'unsupervised']\n"
-        "label_encoding = [column_name or empty list]\n"
+        "problem_type = ['classification' or 'regression']\n"
+        "label_encoding = [only categorical (non-numeric/string/object) column names as a list. Do NOT include integer or float columns.]\n"
         "standard_scalar = ['yes' or 'no']\n"
         "target_column = [col_name]\n\n"
         "For example:\n"
         "drop_columns = ['col1', 'col2']\n"
-        "algorithm = ['supervised']\n"
+        "problem_type = ['classification']\n"
         "label_encoding = ['gender']\n"
         "standard_scalar = ['yes']\n"
         "target_column = [col_name]\n\n" 
@@ -57,7 +57,7 @@ def parse_gpt_structured_response(response_text: str) -> dict:
     # Prepare regex patterns for each expected key
     patterns = {
         "drop_columns": r"drop_columns\s*=\s*\[([^\]]*)\]",
-        "algorithm": r"algorithm\s*=\s*\[([^\]]*)\]",
+        "problem_type": r"problem_type\s*=\s*\[([^\]]*)\]",
         "label_encoding": r"label_encoding\s*=\s*\[([^\]]*)\]",
         "standard_scalar": r"standard_scalar\s*=\s*\[([^\]]*)\]",
         "target_column": r"target_column\s*=\s*\[([^\]]*)\]",
@@ -110,14 +110,14 @@ def create_eda_summary_prompt_spark(sdf):
         f"Here is a basic EDA summary and sample data:\n{summary}\n"
         "Only respond with EXACTLY the following dictionary format, no extra text:\n\n"
         "drop_columns = [col_names as a list]\n"
-        "algorithm = ['supervised' or 'unsupervised']\n"
-        "label_encoding = [column_name or empty list]\n"
+        "problem_type = ['classification' or 'regression']\n"
+        "label_encoding = [only categorical (non-numeric/string/object) column names as a list. Do NOT include integer or float columns.]\n"
         "standard_scalar = ['yes' or 'no']\n"
         "target_column = [col_name]\n\n"
         "For example:\n"
         "drop_columns = ['col1', 'col2']\n"
-        "algorithm = ['supervised']\n"
-        "label_encoding = ['gender']\n"
+        "problem_type = ['classification']\n"
+        "label_encoding = ['gender','city']\n"
         "standard_scalar = ['yes']\n"
         "target_column = ['target_col']\n\n"
         "Only provide this. Do not explain, or add sentences."

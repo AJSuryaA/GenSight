@@ -24,6 +24,9 @@ import pandas as pd
 
 from app.backend.workflows.eda.data_cleaning_pandas import clean_data, save_cleaned_data
 
+from app.backend.workflows.model_training.pandas_ml_training import train_models_pandas 
+from app.backend.workflows.model_training.pyspark_ml_training import *
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: run before app starts receiving requests
@@ -120,7 +123,17 @@ def upload_to_hdfs(local_file_path, hdfs_dir="/user/gen_sight/uploads"):
     except subprocess.CalledProcessError as e:
         print(f"Error uploading to HDFS: {e.stderr}")
         raise
-    
+
+def normalize_structured_data(data_dict):
+    for key in ['problem_type', 'target_column', 'label_encoding', 'drop_columns', 'standard_scalar']:
+        val = data_dict.get(key)
+        if isinstance(val, list):
+            if len(val) == 1:
+                data_dict[key] = val[0]  # convert single-entry lists to plain string
+            else:
+                data_dict[key] = val  # keep lists as-is if multiple elements
+    return data_dict
+
 
 
 @app.post("/upload")
@@ -150,6 +163,7 @@ async def upload_file(file: UploadFile = File(...), command: str = Form(None)):
             # report_file = generate_pandas_eda_report(df)
             # report_url = report_file.replace("app/backend", "app/backend/workflows/eda/reports")
              # Create EDA prompt
+            pandas_eda(df)
             prompt = create_eda_summary_prompt(df)
             # Call GPT API
             gpt_response = call_gpt_api(prompt)
@@ -158,19 +172,23 @@ async def upload_file(file: UploadFile = File(...), command: str = Form(None)):
 
             df_cleaned = clean_data(df, structured_data)
             save_cleaned_data(df_cleaned, "data.csv")
-            # Drop columns from df
-            # df_cleaned = drop_columns(df, cols_to_drop)
-             # Save cleaned data if needed
-            # cleaned_path = file_location.replace(".csv", "_cleaned.csv")
-            # df_cleaned.to_csv(cleaned_path, index=False)
             print("sonar raw response:", gpt_response)
             print("\n\n"+"\n_______________________________________________________________________")
             print("Parsed GPT Data:", structured_data)
             print("\n\n"+"\n_______________________________________________________________________")
+            best_models = train_models_pandas(df, structured_data)
+            print("\n\n"+"\n_______________________________________________________________________")
+            for model_name, result in best_models.items():
+                print(f"Model: {model_name}")
+                if 'best_params' in result:
+                    print("Best Parameters:", result['best_params'])
+                    print("Best CV Score:", result['best_score'])
+                    print("Test Score:", result['test_score'])
+                else:
+                    print("Test Score:", result['score'])
+                print("-" * 40)
+            print("\n\n"+"\n_______________________________________________________________________")
             
-            
-
-            pandas_eda(df)
             return JSONResponse({
                 # other fields...
                 # "eda_report_url": report_url,
@@ -183,31 +201,63 @@ async def upload_file(file: UploadFile = File(...), command: str = Form(None)):
 
         elif mode == "pyspark":
             dataset_info = get_pyspark_info(hdfs_path)
+            spark = SparkSession.builder \
+                .appName("PySparkModelTraining") \
+                .config("spark.driver.bindAddress", "127.0.0.1") \
+                .config("spark.driver.port", "7077") \
+                .getOrCreate()
+            
+            print("✅ Spark session started")
 
-            spark = SparkSession.builder.appName("EDA").getOrCreate()
             try:
-                print("starrted_____________________1")
+                print("started_____________________1")
                 sdf = spark.read.csv(hdfs_path, header=True, inferSchema=True)
-                print("starrted_____________________2")
+                print("✅ Data loaded. Shape:", (sdf.count(), len(sdf.columns)))
+                print("started_____________________2")
+
+                # Drop '_c0' column if exists (common with saved CSVs)
                 if '_c0' in sdf.columns:
                     sdf = sdf.drop('_c0')
-                print("starrted_____________________3")
+
+                print("started_____________________3")
                 pyspark_eda(sdf)  # your existing EDA function
-                print("starrted_____________________4")
-                
+
+                print("started_____________________4")
                 prompt = create_eda_summary_prompt_spark(sdf)
+                print("pprompt: ", prompt)
                 gpt_response = call_gpt_api(prompt)
+                
                 structured_data = parse_gpt_structured_response(gpt_response)
+
                 print("sonar raw response:", gpt_response)
-                print("\n\n"+"\n_______________________________________________________________________")
+                print("\n\n" + "\n_______________________________________________________________________")
                 print("Parsed GPT Data:", structured_data)
-                print("\n\n"+"\n_______________________________________________________________________")
-                print("starrted_____________________5")
+                print("\n\n" + "\n_______________________________________________________________________")
+
+                print("started_____________________5")
                 # Clean Spark dataframe based on GPT instructions
                 sdf_cleaned = clean_data_spark(sdf, structured_data)
-                print("starrted_____________________6")
+                print("started_____________________6")
+
                 hdfs_exact_file_path = "/user/gen_sight/uploads/data.csv"
+                cmd = ["hdfs", "dfs", "-rm", hdfs_exact_file_path]
+                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                print(result.stdout)
+
                 save_cleaned_spark(sdf_cleaned, hdfs_exact_file_path)
+                print("\n\n" + "\n_______________________________________________________________________")
+
+                print("started_____________________7")
+                spark_df = spark.read.csv(hdfs_exact_file_path, header=True, inferSchema=True)
+                print("✅ Data read. Shape:", (spark_df.count(), len(spark_df.columns)))
+
+                best_models = train_models_spark(spark_df, normalize_structured_data(structured_data))
+
+                print("\n\n" + "\n_______________________________________________________________________")
+                print("started_____________________8")
+
+                for model_name, info in best_models.items():
+                    print(f"Best Model: {model_name}, Metric: {info['metric']}")
 
             except Exception as e:
                 spark.stop()
@@ -215,6 +265,7 @@ async def upload_file(file: UploadFile = File(...), command: str = Form(None)):
                 return JSONResponse(status_code=500, content={"error": str(e)})
 
             spark.stop()
+
 
             return JSONResponse({
                 "filename": file.filename,
