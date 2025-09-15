@@ -8,8 +8,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 
-from app.backend.workflows.etl.pandas_processing import get_dataset_info as get_pandas_info
-from app.backend.workflows.etl.pyspark_processing import get_dataset_info as get_pyspark_info
+from app.backend.workflows.data_info.pandas_processing import get_dataset_info as get_pandas_info
+from app.backend.workflows.data_info.pyspark_processing import get_dataset_info as get_pyspark_info
 
 from app.backend.workflows.eda.pandas_eda import pandas_eda
 from app.backend.workflows.eda.pyspark_eda import pyspark_eda

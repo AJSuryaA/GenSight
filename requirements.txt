@@ -16,8 +16,12 @@ apache-airflow-providers-fab
 graphviz
 
 openai
+google-genai
 
 ydata_profiling
 requests
 dotenv
+tiktoken
 
+streamlit 
+weasyprint
