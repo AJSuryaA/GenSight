@@ -3,9 +3,10 @@ const fileNameSpan = document.getElementById('file-name');
 const fileInfoBox = document.getElementById('file-info-box');
 const removeFileBtn = document.getElementById('remove-file-btn');
 const uploadBoxMain = document.getElementById('upload-box-main');
-const commandInput = document.getElementById('command-input');
-const submitBtn = document.getElementById('submit-btn');
 const responseContainer = document.getElementById('response-container');
+const commandInput = document.getElementById('command-line'); // matches HTML
+const submitBtn = document.getElementById('process-btn');      // matches HTML
+const uploadForm = document.getElementById('upload-form');
 
 fileInput.addEventListener('change', function() {
   if (this.files.length > 0) {
@@ -24,42 +25,65 @@ removeFileBtn.addEventListener('click', function() {
   responseContainer.innerHTML = ""; // Clear previous response
 });
 
-submitBtn.addEventListener('click', async function() {
+async function uploadWithTimeout(resource, options = {}) {
+  const { timeout = 10000 } = options;
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  const response = await fetch(resource, {
+    ...options,
+    signal: controller.signal  
+  });
+  clearTimeout(id);
+  return response;
+}
+
+uploadForm.addEventListener('submit', async function(event) {
+  event.preventDefault(); 
+
   if (fileInput.files.length === 0) {
     alert("Please select a file to upload");
     return;
   }
 
+  const file = fileInput.files[0];
   const formData = new FormData();
-  formData.append('file', fileInput.files[0]);
+  formData.append('file', file);
 
-  // Append optional command if provided
   const commandVal = commandInput.value.trim();
   if (commandVal) {
     formData.append('command', commandVal);
   }
 
   try {
-    const response = await fetch('/upload', {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Uploading...';
+
+    const response = await uploadWithTimeout('/upload', {
       method: 'POST',
-      body: formData
+      body: formData,
+      timeout: 15000,
     });
 
     if (response.ok) {
       const data = await response.json();
-      responseContainer.innerHTML = `
-        <h3>Upload Successful!</h3>
-        <p><strong>Filename:</strong> ${data.filename}</p>
-        <p><strong>Processing Mode:</strong> ${data.processing_mode}</p>
-        <p><strong>Local Path:</strong> ${data.local_path}</p>
-        <p><strong>HDFS Path:</strong> ${data.hdfs_path}</p>
-      `;
+      if (data.redirect_url) {
+        // Navigate to workflow monitor first
+        window.location.href = data.redirect_url;
+      } else {
+        window.location.href = '/workflow_monitor';
+      }
     } else {
       const errorData = await response.json();
       responseContainer.innerHTML = `<p style="color:red;">Upload failed: ${errorData.error || response.statusText}</p>`;
     }
   } catch (error) {
-    responseContainer.innerHTML = `<p style="color:red;">Upload failed: ${error.message}</p>`;
+    if (error.name === 'AbortError') {
+      responseContainer.innerHTML = `<p style="color:red;">Upload timed out.</p>`;
+    } else {
+      responseContainer.innerHTML = `<p style="color:red;">Upload failed: ${error.message}</p>`;
+    }
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Analyze Data';
   }
 });
-

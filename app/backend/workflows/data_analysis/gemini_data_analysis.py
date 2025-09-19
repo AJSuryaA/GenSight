@@ -3,7 +3,6 @@ import pandas as pd
 from google.genai import types
 from google.genai import Client
 from dotenv import load_dotenv
-from phrase_gemini_response import *
 
 load_dotenv()
 

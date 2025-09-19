@@ -3,6 +3,12 @@ import shutil
 import subprocess
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import RedirectResponse
+from fastapi import BackgroundTasks
+import uuid
+import json
+from typing import Dict
+
 
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -20,17 +26,29 @@ from app.backend.workflows.eda.pandas_profiling_eda import generate_pandas_eda_r
 
 from app.backend.workflows.eda.gpt_integration import create_eda_summary_prompt, call_gpt_api, parse_gpt_structured_response, create_eda_summary_prompt_spark
 from app.backend.workflows.eda.data_cleaning_pyspark import clean_data_spark, save_cleaned_spark, drop_columns_spark, drop_empty_columns_spark 
-import pandas as pd
 
 from app.backend.workflows.eda.data_cleaning_pandas import clean_data, save_cleaned_data
 
 from app.backend.workflows.model_training.pandas_ml_training import train_models_pandas 
 from app.backend.workflows.model_training.pyspark_ml_training import *
 
+from app.backend.workflows.data_visualization.visualization import plot_from_gpt_dict
+from app.backend.workflows.data_visualization.gpt_visualization import (
+    create_visuvalization_summary_prompt,
+    call_gpt_api,
+    parse_gpt_visualization_response,
+)
+
+from app.backend.workflows.data_analysis.gemini_data_analysis import *
+from app.backend.workflows.data_analysis import phrase_gemini_response as pgr
+from app.backend.workflows.generate_report.generate_report import generate_html
+
+# Global dictionary to track processing tasks (in production, use a proper database)
+processing_tasks: Dict[str, dict] = {}
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: run before app starts receiving requests
-    ensure_hadoop_running()
 
     yield
 
@@ -57,6 +75,11 @@ app.mount("/reports", StaticFiles(directory="app/backend/workflows/eda/reports")
 @app.get("/")
 async def read_index():
     return FileResponse(os.path.join(TEMPLATES_DIR, "index.html"))
+
+@app.get("/workflow_monitor")
+async def read_workflow_monitor():
+    return FileResponse(os.path.join(TEMPLATES_DIR, "workflow_monitor.html"))
+
 
 def check_hadoop_running():
     try:
@@ -134,12 +157,20 @@ def normalize_structured_data(data_dict):
                 data_dict[key] = val  # keep lists as-is if multiple elements
     return data_dict
 
+def visualize_from_gpt_result(data: pd.DataFrame, gpt_result: dict, target_col="target", y_true=None, y_pred=None, y_score=None, save_dir="plots"):
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    plot_from_gpt_dict(data, gpt_result, target_col=target_col, y_true=y_true, y_pred=y_pred, y_score=y_score)
 
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...), command: str = Form(None)):
     try:
+        # Generate a unique task ID
+        task_id = str(uuid.uuid4())
         
+        # Save the file temporarily
         file_location = os.path.join(UPLOAD_DIR, file.filename)
         with open(file_location, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -148,20 +179,62 @@ async def upload_file(file: UploadFile = File(...), command: str = Form(None)):
         # Determine processing mode
         mode = choose_processing_mode(file_location, command)
 
-        # Upload to HDFS
-        print(f"Uploading file to HDFS: {file_location} => directory: /user/gen_sight/uploads")
-        hdfs_path = upload_to_hdfs(file_location)
-        print(f"File uploaded to HDFS path: {hdfs_path}")
+        # Store task information
+        processing_tasks[task_id] = {
+            "status": "uploaded",
+            "file_location": file_location,
+            "mode": mode,
+            "command": command,
+            "result": None,
+            "error": None
+        }
 
+        # Return success with redirect and task ID
+        return JSONResponse({
+            "status": "upload_success",
+            "task_id": task_id,
+            "redirect_url": f"/workflow_monitor?task_id={task_id}"
+        })
+        
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    
+@app.post("/start_processing/{task_id}")
+async def start_processing(task_id: str, background_tasks: BackgroundTasks):
+    if task_id not in processing_tasks:
+        return JSONResponse(status_code=404, content={"error": "Task not found"})
+    
+    task = processing_tasks[task_id]
+    if task["status"] != "uploaded":
+        return JSONResponse(status_code=400, content={"error": "Task already processed"})
+    
+    # Start processing in background
+    task["status"] = "processing"
+    background_tasks.add_task(process_uploaded_file, task_id)
+    
+    return JSONResponse({"status": "processing_started"})
 
-        # Get dataset info based on processing mode
+@app.get("/processing_status/{task_id}")
+async def get_processing_status(task_id: str):
+    if task_id not in processing_tasks:
+        return JSONResponse(status_code=404, content={"error": "Task not found"})
+    
+    return JSONResponse(processing_tasks[task_id])
+
+async def process_uploaded_file(task_id: str):
+    try:
+        task = processing_tasks[task_id]
+        file_location = task["file_location"]
+        mode = task["mode"]
+        command = task["command"]
+        
         if mode == "pandas":
             dataset_info = get_pandas_info(file_location)
 
             # Run EDA for pandas
             df = pd.read_csv(file_location)
-            # report_file = generate_pandas_eda_report(df)
-            # report_url = report_file.replace("app/backend", "app/backend/workflows/eda/reports")
+            report_file = generate_pandas_eda_report(df)
+            report_url = report_file.replace("app/backend", "app/backend/workflows/eda/reports")
              # Create EDA prompt
             pandas_eda(df)
             prompt = create_eda_summary_prompt(df)
@@ -188,7 +261,72 @@ async def upload_file(file: UploadFile = File(...), command: str = Form(None)):
                     print("Test Score:", result['score'])
                 print("-" * 40)
             print("\n\n"+"\n_______________________________________________________________________")
+
+            # Example file path - update with your actual data file
+            file_location = "/home/master_node/GenSight/uploaded_files/data.csv"
+
+            # Load the cleaned dataframe
+            df = pd.read_csv(file_location)
             
+            problem_type = structured_data.get('problem_type', [None])[0]
+            print("problem Type : ", problem_type)
+            print("\n\n"+"\n_______________________________________________________________________")
+            # Create prompt to send to GPT
+            prompt = create_visuvalization_summary_prompt(df,  problem_type)
+            print("Prompt sent to GPT:\n", prompt)
+            print("\n\n"+"\n_______________________________________________________________________")
+            # Call GPT API (uncomment below when API key is set)
+            response_text = call_gpt_api(prompt)
+            print("\nRaw GPT response:\n", response_text)
+            print("\n\n"+"\n_______________________________________________________________________")
+            # For testing without API call, you can assign response_text manually, e.g.:
+            # response_text = """result = { ... }"""
+
+            # Parse the GPT response into a dictionary
+            parsed_result = parse_gpt_visualization_response(response_text)
+            print("\nParsed visualization dictionaries:\n", parsed_result)
+            print("\n\n"+"\n_______________________________________________________________________")
+            # Example: if you have true labels and predictions from model (required for confusion matrix/ROC)
+            # Replace these with your actual values after model prediction
+            y_true = df['target'] if 'target' in df.columns else None
+            y_pred = None  # provide your predictions here, e.g., model.predict(X_test)
+            y_score = None  # provide predicted probabilities/scores here if available
+
+            # Generate visualizations based on GPT instructions
+            visualize_from_gpt_result(df, parsed_result, target_col='target', y_true=y_true, y_pred=y_pred, y_score=y_score)
+            print("\n\n"+"\n_______________________________________________________________________")
+            # Load your dataframe (update path)
+            df = pd.read_csv("/home/master_node/GenSight/uploaded_files/data.csv")
+
+            # Folder with generated visualization images
+            folder_path = "/home/master_node/GenSight/plots"
+
+            df_summary = generate_dataframe_summary(df)
+            images = read_images_from_folder(folder_path)
+
+            client = Client(api_key=os.getenv("Gemini_API"))  # Make sure GOOGLE_APPLICATION_CREDENTIALS is set for authentication
+
+            analysis = analyze_with_gemini(client, df_summary, images)
+            print("\n\n"+"\n_______________________________________________________________________")
+            print("\nGemini API Analysis Result:\n", analysis)
+            print("\n\n"+"\n_______________________________________________________________________1")
+
+            eda_summary_str, image_insights_list, summary_str = pgr.extract_sections_from_gpt_response(analysis)
+            print("\n\n"+"\n_______________________________________________________________________1")
+
+            # Print/results example:
+            print("EDA Summary:\n", eda_summary_str)
+            print("\nImage Insights:")
+            for img, insight in image_insights_list:
+                print(f"{img}: {insight}")
+            print("\nSummary Insights:\n", summary_str)
+            print("\n\n"+"\n_______________________________________________________________________report")
+
+            print("Generating GenSight report...")
+            generate_html(eda_summary_str, image_insights_list, summary_str)
+
+            task["result"] = {"message": "Pandas processing completed"}
+
             return JSONResponse({
                 # other fields...
                 # "eda_report_url": report_url,
@@ -198,8 +336,10 @@ async def upload_file(file: UploadFile = File(...), command: str = Form(None)):
                 "gpt_suggestions": gpt_response
             })
             
-
+            
         elif mode == "pyspark":
+            ensure_hadoop_running()
+            hdfs_path = upload_to_hdfs(file_location)
             dataset_info = get_pyspark_info(hdfs_path)
             spark = SparkSession.builder \
                 .appName("PySparkModelTraining") \
@@ -259,6 +399,9 @@ async def upload_file(file: UploadFile = File(...), command: str = Form(None)):
                 for model_name, info in best_models.items():
                     print(f"Best Model: {model_name}, Metric: {info['metric']}")
 
+
+                
+
             except Exception as e:
                 spark.stop()
                 print(f"Error during PySpark processing: {e}")
@@ -268,7 +411,7 @@ async def upload_file(file: UploadFile = File(...), command: str = Form(None)):
 
 
             return JSONResponse({
-                "filename": file.filename,
+                # "filename": file.filename,
                 "processing_mode": mode,
                 "message": "File uploaded and cleaned successfully.",
                 "local_path": file_location,
@@ -276,7 +419,14 @@ async def upload_file(file: UploadFile = File(...), command: str = Form(None)):
                 "dataset_info": dataset_info,
                 "gpt_suggestions": gpt_response
             })
-
+        
+        task["status"] = "completed"
+        
+    except Exception as e:
+        task["status"] = "error"
+        task["error"] = str(e)
+        print(f"Error processing task {task_id}: {e}")
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+

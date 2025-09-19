@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Analysis Workflow</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/static/workflow_monitor.css">
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <i class="fas fa-project-diagram"></i>
+      Data Analysis Workflow
+    </div>
+    <div class="controls">
+      <button class="btn" id="resetViewBtn">
+        <i class="fas fa-sync-alt"></i> Reset View
+      </button>
+      <button class="btn btn-primary" id="liveViewBtn">
+        <i class="fas fa-eye"></i> Live View
+      </button>
+      <button class="btn" id="exportBtn">
+        <i class="fas fa-download"></i> Export
+      </button>
+    </div>
+  </header>
+  
+  <div class="container">
+    <div class="workflow-area">
+      <div class="workflow-canvas" id="workflowCanvas">
+        <svg class="connection-layer" id="connectionLayer"></svg>
+      </div>
+      <div class="hint">
+        <i class="fas fa-info-circle"></i> Use mouse wheel to zoom, drag to pan
+      </div>
+    </div>
+    
+    <div class="live-view-panel" id="liveViewPanel">
+      <div class="live-view-header">
+        <div class="live-view-title">
+          <i class="fas fa-play-circle"></i> Live Process
+        </div>
+      </div>
+      <div class="live-view-content" id="liveViewContent">
+        <!-- Live view will be added later -->
+      </div>
+    </div>
+  </div>
+  
+  <div class="zoom-controls">
+    <button class="zoom-btn" id="zoomInBtn">
+      <i class="fas fa-plus"></i>
+    </button>
+    <button class="zoom-btn" id="zoomOutBtn">
+      <i class="fas fa-minus"></i>
+    </button>
+    <button class="zoom-btn" id="resetZoomBtn">
+      <i class="fas fa-search"></i>
+    </button>
+  </div>
+
+
+    <script src="/static/workflow_monitor.js"></script>
+</body>
+</html>

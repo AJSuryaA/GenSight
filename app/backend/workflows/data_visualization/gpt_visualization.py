@@ -7,13 +7,12 @@ load_dotenv()
 API_KEY = os.getenv("PERPLEXITY_API_KEY_2")
 API_URL = "https://api.perplexity.ai/chat/completions"
 
-def create_visuvalization_summary_prompt(df: pd.DataFrame, model_performance, problem_type) -> str:
+def create_visuvalization_summary_prompt(df: pd.DataFrame,  problem_type) -> str:
     summary = [
         "Data Types:\n" + df.dtypes.to_string(),
         "\nMissing Values:\n" + df.isnull().sum().to_string(),
         "\nUnique Values:\n" + df.nunique().to_string(),
         "\nSample Data:\n" + df.head(5).to_string(),
-        "\nmodel_performance:\n" + model_performance,
         "\nproblem_type:\n" + problem_type,
     ]
     prompt = "\n".join(summary)
@@ -118,17 +117,10 @@ if __name__ == "__main__":
     file_location= '/home/master_node/GenSight/uploaded_files/data.csv'
     df = pd.read_csv(file_location)
 
-    model_performance = (
-        "LogisticRegression: Best CV Score: 0.811, Test Score: 0.816; "
-        "RandomForestClassifier: Best CV Score: 0.855, Test Score: 0.776; "
-        "DecisionTreeClassifier: Best CV Score: 0.775, Test Score: 0.842; "
-        "SVM: Best CV Score: 0.829, Test Score: 0.816"
-    )
-
     problem_type = "classification"
 
     # Create prompt from dataframe and model info
-    prompt = create_visuvalization_summary_prompt(df, model_performance, problem_type)
+    prompt = create_visuvalization_summary_prompt(df, problem_type)
     print("Prompt sent to GPT:\n", prompt)
 
     # Call the API and get response (uncomment below when API key is set)

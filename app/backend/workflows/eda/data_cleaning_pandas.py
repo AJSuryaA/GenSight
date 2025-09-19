@@ -4,7 +4,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 
 
-UPLOAD_DIR = "/home/master_node/Gensight_P/uploaded_files"
+UPLOAD_DIR = "/home/master_node/GenSight/uploaded_files"
 def drop_columns(df: pd.DataFrame, cols_to_drop: list) -> pd.DataFrame:
     cols_exist = [col for col in cols_to_drop if col in df.columns]
     return df.drop(columns=cols_exist)
