@@ -2,14 +2,15 @@ import os
 import shutil
 import subprocess
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi import BackgroundTasks
 import uuid
 import json
 from typing import Dict
-
-
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -63,6 +64,8 @@ FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "../frontend")
 TEMPLATES_DIR = os.path.join(FRONTEND_DIR, "templates")
 STATIC_DIR = os.path.join(FRONTEND_DIR, "static")
 
+templates = Jinja2Templates(directory="templates")
+
 # Directory to save uploaded files temporarily before moving to data lake
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "../../uploaded_files")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -70,6 +73,24 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # Mount static files (CSS, JS)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/reports", StaticFiles(directory="app/backend/workflows/eda/reports"), name="reports")
+app.mount("/logs", StaticFiles(directory="logs"), name="logs")
+app.mount("/eda_report", StaticFiles(directory="eda_report"), name="eda_report")
+
+LOG_FILE = "logs/mylog.jsonl"
+report_file= "eda_report/report.html"
+
+thread = None
+with open(LOG_FILE, "w") as f:
+    f.write("")  # Clear file
+    
+import os
+
+folder = "plots"
+for filename in os.listdir(folder):
+    file_path = os.path.join(folder, filename)
+    if os.path.isfile(file_path):
+        os.remove(file_path)
+
 
 # Serve the upload page
 @app.get("/")
@@ -80,7 +101,15 @@ async def read_index():
 async def read_workflow_monitor():
     return FileResponse(os.path.join(TEMPLATES_DIR, "workflow_monitor.html"))
 
+@app.post("/eda_report")
+async def serve_report():
+    try:
+        return RedirectResponse(url=report_file, status_code=303)
+    except Exception as e:
+        return HTMLResponse(content=f"Error loading report: {str(e)}", status_code=500)
 
+
+    
 def check_hadoop_running():
     try:
         result = subprocess.run(['jps'], capture_output=True, text=True)
@@ -115,8 +144,29 @@ def ensure_hadoop_running():
     if not check_hadoop_running():
         print("Hadoop services not running. Starting services...")
         start_hadoop_services()
+        create_log(process= "Checking Hadoop services :", response= f"Hadoop services not running. Starting services...", print_effect="print entirely")
+    
     else:
         print("Hadoop services already running.")
+
+        create_log(process= "Checking Hadoop services :", response= f"Hadoop services already running.", print_effect="print entirely")
+    
+
+def create_log(process: str, response, print_effect= "type effect", final= "Process : Task completed successfully!"):
+    process_log = {
+            f"{process}": [
+                f"Process : Starting task...",
+                "print entirely",
+                f"{response}",
+                f"{print_effect}",
+                f"{final}",
+                "print entirely"
+            ]
+        }
+    
+    with open(LOG_FILE, "a") as f:
+        f.write(json.dumps(process_log) + "\n")
+
 
 def choose_processing_mode(file_path, command_input=None):
     SIZE_THRESHOLD = 100 * 1024 * 1024  # 100MB
@@ -178,6 +228,20 @@ async def upload_file(file: UploadFile = File(...), command: str = Form(None)):
 
         # Determine processing mode
         mode = choose_processing_mode(file_location, command)
+        
+        # user file upload
+        create_log(process= "1", response= "0", print_effect="none", final="blinkNode")
+        create_log(process= "1", response= "0", print_effect="none", final="highlightNodeGreen")
+        create_log(process= "User File upload", response= "file upload started . . . .")
+        
+        # pandas / pyspark
+        create_log(process= "1", response= "2", print_effect="none", final="setConnectionYellowGlow")
+        create_log(process= "2", response= "0", print_effect="none", final="blinkNode")
+        create_log(process= "Choosing Processing Mode :", response= f"Mode: {mode}", print_effect="print entirely")        
+        create_log(process= "1", response= "2", print_effect="none", final="setConnectionGreen" )
+        create_log(process= "2", response= "0", print_effect="none", final="highlightNodeGreen")
+        create_log(process= "2", response= "panel-left", print_effect="none", final="setConnectionYellowGlow")
+        create_log(process= "3", response= "0", print_effect="none", final="blinkNode")
 
         # Store task information
         processing_tasks[task_id] = {
@@ -226,31 +290,82 @@ async def process_uploaded_file(task_id: str):
         task = processing_tasks[task_id]
         file_location = task["file_location"]
         mode = task["mode"]
-        command = task["command"]
         
         if mode == "pandas":
-            dataset_info = get_pandas_info(file_location)
+            
+            # file upload success  
 
+            create_log(process= "file upload", response= f"file uploaded sucessfully\nlocation: {file_location}")
+            create_log(process= "2", response= "panel-left", print_effect="none", final="setConnectionGreen" )
+            create_log(process= "3", response= "0", print_effect="none", final="highlightNodeGreen")
+
+            
+            dataset_info = get_pandas_info(file_location)
+            create_log(process= "Getting Data info ....", response= f"{dataset_info}")
+
+            
             # Run EDA for pandas
             df = pd.read_csv(file_location)
+
             report_file = generate_pandas_eda_report(df)
             report_url = report_file.replace("app/backend", "app/backend/workflows/eda/reports")
-             # Create EDA prompt
-            pandas_eda(df)
+            create_log(process= "generating basic EDA ....", response= f"file location :{report_url}")
+
+            # Create EDA prompt
+            create_log(process= "3", response= "4", print_effect="none", final="setConnectionYellowGlow")
+            create_log(process= "4", response= "0", print_effect="none", final="blinkNode")
+            eda= pandas_eda(df)
+            create_log(process= "Advanced EDA", response= f"eda result :{eda}")
+            create_log(process= "3", response= "4", print_effect="none", final="setConnectionGreen" )
+            create_log(process= "4", response= "0", print_effect="none", final="highlightNodeGreen")
+
+            
+            create_log(process= "panel-left", response= "panel-ai1", print_effect="none", final="setConnectionYellowGlow")
+            create_log(process= "9", response= "0", print_effect="none", final="blinkNode")
+            # creating prompt
             prompt = create_eda_summary_prompt(df)
+            create_log(process= "Creating prompt:", response= f"{prompt}")  
             # Call GPT API
             gpt_response = call_gpt_api(prompt)
+            create_log(process= "Prompting Sonar-Pro AI :", response= f"Sonar-Pro Response:\n{gpt_response}")            
+            create_log(process= "panel-left", response= "panel-ai1", print_effect="none", final="setConnectionGreen" )
+            create_log(process= "9", response= "0", print_effect="none", final="highlightNodeGreen")
+                        
+
+            create_log(process= "9", response= "10", print_effect="none", final="setConnectionYellowGlow")
+            create_log(process= "10", response= "0", print_effect="none", final="blinkNode")
             # Parse GPT response to get columns to drop
             structured_data = parse_gpt_structured_response(gpt_response)
+            create_log(process= "Parsing Sonar-Pro Response :", response= f"Parsed Output:\n{structured_data}")
+            create_log(process= "9", response= "10", print_effect="none", final="setConnectionGreen" )
+            create_log(process= "10", response= "0", print_effect="none", final="highlightNodeGreen")
+                        
 
+            create_log(process= "panel-ai1", response= "11", print_effect="none", final="setConnectionYellowGlow")
+            create_log(process= "11", response= "0", print_effect="none", final="blinkNode")
             df_cleaned = clean_data(df, structured_data)
+            create_log(process= "Data Cleaning :", response= "Data cleaning with Ai recommendation ")
+            create_log(process= "panel-ai1", response= "11", print_effect="none", final="setConnectionGreen" )
+            create_log(process= "11", response= "0", print_effect="none", final="highlightNodeGreen")
+
+
+            create_log(process= "11", response= "12", print_effect="none", final="setConnectionYellowGlow")
+            create_log(process= "12", response= "0", print_effect="none", final="blinkNode")
             save_cleaned_data(df_cleaned, "data.csv")
-            print("sonar raw response:", gpt_response)
-            print("\n\n"+"\n_______________________________________________________________________")
+            create_log(process= "Saving Cleaned data :", response= "the data is cleaned and stored sucessfully")
+            create_log(process= "11", response= "12", print_effect="none", final="setConnectionGreen" )
+            create_log(process= "12", response= "0", print_effect="none", final="highlightNodeGreen")
+            
+           
+            print("sonar raw response:", gpt_response)           
             print("Parsed GPT Data:", structured_data)
-            print("\n\n"+"\n_______________________________________________________________________")
+            
+            
+            # model Training
             best_models = train_models_pandas(df, structured_data)
-            print("\n\n"+"\n_______________________________________________________________________")
+            create_log(process= "Training Model :", response= f"Machine learing model trained\nbest models :{best_models}")
+
+            
             for model_name, result in best_models.items():
                 print(f"Model: {model_name}")
                 if 'best_params' in result:
@@ -260,7 +375,6 @@ async def process_uploaded_file(task_id: str):
                 else:
                     print("Test Score:", result['score'])
                 print("-" * 40)
-            print("\n\n"+"\n_______________________________________________________________________")
 
             # Example file path - update with your actual data file
             file_location = "/home/master_node/GenSight/uploaded_files/data.csv"
@@ -270,60 +384,104 @@ async def process_uploaded_file(task_id: str):
             
             problem_type = structured_data.get('problem_type', [None])[0]
             print("problem Type : ", problem_type)
-            print("\n\n"+"\n_______________________________________________________________________")
+            
+
+            create_log(process= "12", response= "panel-ai2", print_effect="none", final="setConnectionYellowGlow")
+            create_log(process= "15", response= "0", print_effect="none", final="blinkNode")
             # Create prompt to send to GPT
             prompt = create_visuvalization_summary_prompt(df,  problem_type)
             print("Prompt sent to GPT:\n", prompt)
-            print("\n\n"+"\n_______________________________________________________________________")
+            create_log(process= "Creating Prompt(visualization) :", response= f"prompt:\n{prompt}")
             # Call GPT API (uncomment below when API key is set)
             response_text = call_gpt_api(prompt)
             print("\nRaw GPT response:\n", response_text)
-            print("\n\n"+"\n_______________________________________________________________________")
-            # For testing without API call, you can assign response_text manually, e.g.:
-            # response_text = """result = { ... }"""
+            create_log(process= "Prompting Gemini Ai for visualization recommendation :", response= f"Gemini Response:\n{response_text}")
+            create_log(process= "12", response= "panel-ai2", print_effect="none", final="setConnectionGreen" )
+            create_log(process= "15", response= "0", print_effect="none", final="highlightNodeGreen")
+            
 
+            create_log(process= "15", response= "16", print_effect="none", final="setConnectionYellowGlow")
+            create_log(process= "16", response= "0", print_effect="none", final="blinkNode")
             # Parse the GPT response into a dictionary
             parsed_result = parse_gpt_visualization_response(response_text)
-            print("\nParsed visualization dictionaries:\n", parsed_result)
-            print("\n\n"+"\n_______________________________________________________________________")
+            print("\nParsed visualization dictionaries:\n", parsed_result) 
+            create_log(process= "Parsing Gemini Ai Response :", response= f"Parsed Gemini Response:\n{parsed_result}")           
+            create_log(process= "15", response= "16", print_effect="none", final="setConnectionGreen" )
+            create_log(process= "16", response= "0", print_effect="none", final="highlightNodeGreen")
+
+
+            # For testing without API call, you can assign response_text manually, e.g.:
+            # response_text = """result = { ... }"""
             # Example: if you have true labels and predictions from model (required for confusion matrix/ROC)
             # Replace these with your actual values after model prediction
             y_true = df['target'] if 'target' in df.columns else None
             y_pred = None  # provide your predictions here, e.g., model.predict(X_test)
             y_score = None  # provide predicted probabilities/scores here if available
 
+
+            create_log(process= "panel-ai2", response= "17", print_effect="none", final="setConnectionYellowGlow")
+            create_log(process= "17", response= "0", print_effect="none", final="blinkNode") 
             # Generate visualizations based on GPT instructions
             visualize_from_gpt_result(df, parsed_result, target_col='target', y_true=y_true, y_pred=y_pred, y_score=y_score)
-            print("\n\n"+"\n_______________________________________________________________________")
+            # Folder with generated visualization images
+            folder_path = "/home/master_node/GenSight/plots"
+            create_log(process= "Generating Visualization recommended by Ai", response= f"Visualization started and the plots will be saved at : {folder_path} ")
+            create_log(process= "panel-ai2", response= "17", print_effect="none", final="setConnectionGreen" )
+            create_log(process= "17", response= "0", print_effect="none", final="highlightNodeGreen")
+
+
+            
             # Load your dataframe (update path)
             df = pd.read_csv("/home/master_node/GenSight/uploaded_files/data.csv")
 
-            # Folder with generated visualization images
-            folder_path = "/home/master_node/GenSight/plots"
+            create_log(process= "17", response= "18", print_effect="none", final="setConnectionYellowGlow")
+            create_log(process= "18", response= "0", print_effect="none", final="blinkNode")
+            create_log(process= "Saving Visualization grnerated", response= f"Visualization images saved at : {folder_path} ")
+            create_log(process= "17", response= "18", print_effect="none", final="setConnectionGreen" )
+            create_log(process= "18", response= "0", print_effect="none", final="highlightNodeGreen")
 
+
+            create_log(process= "18", response= "panel-ai3", print_effect="none", final="setConnectionYellowGlow")
+            create_log(process= "19", response= "0", print_effect="none", final="blinkNode")
             df_summary = generate_dataframe_summary(df)
             images = read_images_from_folder(folder_path)
-
+            print(df_summary)
+            create_log(process= "Creating Prompt for plots insight", response= f"prompt : {df_summary} ")
+            create_log(process= "17", response= "18", print_effect="none", final="setConnectionGreen" )
+            create_log(process= "18", response= "panel-ai3", print_effect="none", final="setConnectionGreen" )
+            create_log(process= "19", response= "0", print_effect="none", final="highlightNodeGreen")
+            
             client = Client(api_key=os.getenv("Gemini_API"))  # Make sure GOOGLE_APPLICATION_CREDENTIALS is set for authentication
 
+
+            create_log(process= "19", response= "20", print_effect="none", final="setConnectionYellowGlow")
+            create_log(process= "20", response= "0", print_effect="none", final="blinkNode")
+
             analysis = analyze_with_gemini(client, df_summary, images)
-            print("\n\n"+"\n_______________________________________________________________________")
             print("\nGemini API Analysis Result:\n", analysis)
-            print("\n\n"+"\n_______________________________________________________________________1")
-
             eda_summary_str, image_insights_list, summary_str = pgr.extract_sections_from_gpt_response(analysis)
-            print("\n\n"+"\n_______________________________________________________________________1")
-
             # Print/results example:
             print("EDA Summary:\n", eda_summary_str)
             print("\nImage Insights:")
             for img, insight in image_insights_list:
                 print(f"{img}: {insight}")
             print("\nSummary Insights:\n", summary_str)
-            print("\n\n"+"\n_______________________________________________________________________report")
+            create_log(process= "Parsing Gemini Ai for image insights", response= f"Gemini Response : {eda_summary_str, image_insights_list}\n{image_insights_list}\n{summary_str} ")
+            create_log(process= "19", response= "20", print_effect="none", final="setConnectionGreen" )
+            create_log(process= "20", response= "0", print_effect="none", final="highlightNodeGreen")
 
+
+            create_log(process= "panel-ai3", response= "21", print_effect="none", final="setConnectionYellowGlow")
+            create_log(process= "21", response= "0", print_effect="none", final="blinkNode")
             print("Generating GenSight report...")
             generate_html(eda_summary_str, image_insights_list, summary_str)
+            create_log(process= "Generating HTML :", response= f"Gemini Response is parsed and converted into HTML for user")
+            create_log(process= "panel-ai3", response= "21", print_effect="none", final="setConnectionGreen" )
+            create_log(process= "21", response= "0", print_effect="none", final="highlightNodeGreen")
+            
+            #program end
+            create_log(process= "", response= "", print_effect="final", final="highlightNodeGreen")
+
 
             task["result"] = {"message": "Pandas processing completed"}
 
@@ -339,6 +497,7 @@ async def process_uploaded_file(task_id: str):
             
         elif mode == "pyspark":
             ensure_hadoop_running()
+                           
             hdfs_path = upload_to_hdfs(file_location)
             dataset_info = get_pyspark_info(hdfs_path)
             spark = SparkSession.builder \
@@ -430,3 +589,13 @@ async def process_uploaded_file(task_id: str):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+
+        
+
+        # Upload to HDFS
+        # print(f"Uploading file to HDFS: {file_location} => directory: /user/gen_sight/uploads")
+        # hdfs_path = upload_to_hdfs(file_location)
+        # print(f"File uploaded to HDFS path: {hdfs_path}")
+
+
+        # Get dataset info based on processing mode

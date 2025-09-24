@@ -76,7 +76,7 @@ airflow/airflow-webserver.pid
 
 # ydata_profiling reports output folder if generated
 reports/
-
+eda_reports/
 # pyenv
 .python-version
 

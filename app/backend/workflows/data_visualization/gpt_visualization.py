@@ -22,6 +22,7 @@ def create_visuvalization_summary_prompt(df: pd.DataFrame,  problem_type) -> str
     "- Suggest visualizations strictly necessary to understand feature relationships with the target for inference.\n"
     "- Do NOT include redundant visualizations for features highly correlated (> |0.8|); keep only one representative.\n"
     "- Skip features with low or zero correlation.\n"
+    "- Suggest me minimum of 5 plots.\n"
     "- Prioritize features most relevant to the target based on correlation.\n"
     "- Include pair plots if they meaningfully contribute to inference.\n"
     "- Use only these chart types: ['histogram', 'boxplot', 'violin', 'bar', 'heatmap', 'line-chart', 'scatter'].\n"
@@ -114,7 +115,7 @@ def extract_balanced_braces(text, start):
 
 if __name__ == "__main__":
     # Example dummy DataFrame for testing
-    file_location= '/home/master_node/GenSight/uploaded_files/data.csv'
+    file_location= '/home/master_node/Gensight_P/uploaded_files/data.csv'
     df = pd.read_csv(file_location)
 
     problem_type = "classification"

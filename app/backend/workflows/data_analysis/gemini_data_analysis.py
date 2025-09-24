@@ -26,20 +26,31 @@ def read_images_from_folder(folder_path: str) -> list:
 
 def analyze_with_gemini(client, df_summary: str, images: list, model_name: str = "gemini-2.5-flash") -> str:
     contents = [types.Part(
-        text=f"Dataset Summary:\n{df_summary}\n\nPlease analyze the attached visualization images and provide insights.\n"
-        "do not use bold just print output without formating"
-        "first give basic EDA overview \n"
-        "followed by , nameof the image and inferance from that \n"
-        "finally summary insights\n"
-        "dont use name target, find whats the column about and indicate that\n"
-        "For example:\n"
-        "EDA overview :\n"
-        "points\n"
-        "2_boxplot_age_target.png \n"
-        "insight\n"
-        "summary: \n"
-        "summary insights"
-        )]
+        text=(
+            f"Dataset Summary:\n{df_summary}\n\n"
+            "Please analyze the attached visualization images and provide insights.\n"
+            "Return output strictly in dictionary format (JSON-like). Do not use bold, do not add extra text, "
+            "and do not deviate from the structure.\n\n"
+            "The dictionary must follow this structure:\n"
+            "{\n"
+            "  'EDA_overview': {\n"
+            "       'point1': '...'\n"
+            "       'point2': '...'\n"
+            "   },\n"
+            "  'image_insights': {\n"
+            "       '1_boxplot_age_target.png': 'insight about the plot',\n"
+            "       '2_boxplot_thalach_target.png': 'insight about the plot',\n"
+            "       ...\n"
+            "   },\n"
+            "  'summary': {\n"
+            "       'insight1': '...',\n"
+            "       'insight2': '...'\n"
+            "   }\n"
+            "}\n\n"
+            "Do not use the word 'target'. Instead, describe what the column represents (e.g., medical condition presence/absence).\n"
+        )
+    )]
+
     for filename, image_bytes in images:
         contents.append(types.Part.from_bytes(data=image_bytes, mime_type='image/png'))
         contents.append(types.Part(text=f"Please analyze the visualization image named '{filename}' and provide data insights."))
@@ -50,20 +61,3 @@ def analyze_with_gemini(client, df_summary: str, images: list, model_name: str =
     )
     return response.text
 
-def main():
-    # Load your dataframe (update path)
-    df = pd.read_csv("/home/master_node/GenSight/uploaded_files/data.csv")
-
-    # Folder with generated visualization images
-    folder_path = "/home/master_node/GenSight/plots"
-
-    df_summary = generate_dataframe_summary(df)
-    images = read_images_from_folder(folder_path)
-
-    client = Client(api_key=os.getenv("Gemini_API"))  # Make sure GOOGLE_APPLICATION_CREDENTIALS is set for authentication
-
-    analysis = analyze_with_gemini(client, df_summary, images)
-    print("\nGemini API Analysis Result:\n", analysis)
-
-if __name__ == "__main__":
-    main()
