@@ -1,1 +1,1 @@
-# GenSight integration ith Apache Airflow
+# GenSight integration with Apache Airflow
